@@ -29,7 +29,8 @@ body:has(.ab-cart) { background: var(--ab-bg); }
 
 
 [data-theme='dark'] .auth-recovery-page { color: var(--ab-text); }
-[data-theme='dark'] .apple-auth-recovery-card { background: var(--ab-surface); border-color: var(--ab-separator); box-shadow: none; }
-[data-theme='dark'] .auth-back-link { background: var(--ab-surface); color: var(--ab-text-2); border-color: var(--ab-separator); }
-[data-theme='dark'] .auth-input { background: var(--ab-surface-2) !important; border-color: var(--ab-separator) !important; color: var(--ab-text) !important; }
+[data-theme='dark'] .apple-auth-recovery-card { background: rgba(28, 28, 30, 0.88); border-color: rgba(255, 255, 255, 0.14); box-shadow: 0 30px 80px -15px rgba(0, 0, 0, 0.75); }
+[data-theme='dark'] .auth-back-link { background: rgba(255, 255, 255, 0.08); color: var(--ab-text-2); border-color: rgba(255, 255, 255, 0.14); }
+[data-theme='dark'] .auth-input { background: rgba(255, 255, 255, 0.08) !important; border-color: rgba(255, 255, 255, 0.14) !important; color: var(--ab-text) !important; }
+[data-theme='dark'] .auth-input-label { color: var(--ab-text) !important; }
 [data-theme='dark'] .auth-recovery-header :is(h1, p), [data-theme='dark'] .auth-recovery-footer { color: var(--ab-text); }

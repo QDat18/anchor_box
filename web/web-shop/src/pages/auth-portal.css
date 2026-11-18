@@ -266,12 +266,60 @@
 .auth-input-label {
   display: block !important;
   text-align: left !important;
-  font-size: 11.5px !important;
-  font-weight: 600 !important;
-  color: #1d1d1f !important;
-  margin: 0 0 4px 0 !important;
+  font-size: 12px !important;
+  font-weight: 550 !important;
+  letter-spacing: -0.01em !important;
+  color: var(--ab-text, #1d1d1f) !important;
+  margin: 0 0 5px 0 !important;
   padding: 0 !important;
   width: 100% !important;
+}
+
+.auth-input-label-row {
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  width: 100% !important;
+  margin-bottom: 5px !important;
+}
+
+.auth-input-label-row .auth-input-label {
+  margin-bottom: 0 !important;
+  width: auto !important;
+}
+
+.auth-resend-btn {
+  background: transparent !important;
+  border: none !important;
+  color: #0071e3 !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  cursor: pointer !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 4px !important;
+  padding: 2px 6px !important;
+  border-radius: 6px !important;
+  transition: all 0.15s ease !important;
+}
+
+.auth-resend-btn:hover {
+  color: #0077ed !important;
+  background: rgba(0, 113, 227, 0.08) !important;
+}
+
+.auth-token-alert {
+  font-size: 12.5px !important;
+  color: #248a3d !important;
+  padding: 8px 12px !important;
+  background: rgba(52, 199, 89, 0.12) !important;
+  border: 1px solid rgba(52, 199, 89, 0.25) !important;
+  border-radius: 10px !important;
+  margin-bottom: 12px !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  text-align: left !important;
 }
 
 .auth-input-wrapper {
@@ -967,4 +1015,148 @@
   .auth-recovery-header h1 {
     font-size: 22px;
   }
+}
+
+/* ==========================================================================
+   APPLE HIG DARK MODE SPECIFICATION (SPACE BLACK / FROSTED OBSIDIAN)
+   ========================================================================== */
+
+[data-theme='dark'] .auth-recovery-page,
+[data-theme='dark'] .auth-portal-page {
+  background: #000000 !important;
+  background-image: 
+    radial-gradient(at 15% 15%, rgba(10, 132, 255, 0.16) 0px, transparent 60%),
+    radial-gradient(at 85% 20%, rgba(94, 92, 230, 0.14) 0px, transparent 60%),
+    radial-gradient(at 50% 85%, rgba(48, 209, 88, 0.10) 0px, transparent 65%) !important;
+  color: #f5f5f7 !important;
+}
+
+[data-theme='dark'] .apple-auth-recovery-card {
+  background: rgba(28, 28, 30, 0.88) !important;
+  backdrop-filter: blur(50px) saturate(190%) !important;
+  -webkit-backdrop-filter: blur(50px) saturate(190%) !important;
+  border: 1px solid rgba(255, 255, 255, 0.14) !important;
+  box-shadow: 0 30px 80px -15px rgba(0, 0, 0, 0.75), inset 0 1px 0 rgba(255, 255, 255, 0.1) !important;
+  color: #f5f5f7 !important;
+}
+
+[data-theme='dark'] .auth-recovery-emblem {
+  background: rgba(255, 255, 255, 0.08) !important;
+  border: 1px solid rgba(255, 255, 255, 0.14) !important;
+  color: #2997ff !important;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4) !important;
+}
+
+[data-theme='dark'] .auth-recovery-header h1 {
+  color: #f5f5f7 !important;
+}
+
+[data-theme='dark'] .auth-recovery-header p {
+  color: #a1a1a6 !important;
+}
+
+[data-theme='dark'] .auth-input-label {
+  color: #f5f5f7 !important;
+}
+
+[data-theme='dark'] .auth-input {
+  background: rgba(255, 255, 255, 0.08) !important;
+  border: 1px solid rgba(255, 255, 255, 0.14) !important;
+  color: #ffffff !important;
+}
+
+[data-theme='dark'] .auth-input:focus {
+  background: rgba(255, 255, 255, 0.12) !important;
+  border-color: #2997ff !important;
+  box-shadow: 0 0 0 3.5px rgba(41, 151, 255, 0.3) !important;
+}
+
+[data-theme='dark'] .auth-input-icon {
+  color: #98989d !important;
+}
+
+[data-theme='dark'] .auth-input:focus + .auth-input-icon,
+[data-theme='dark'] .auth-input-wrapper:focus-within .auth-input-icon {
+  color: #2997ff !important;
+}
+
+[data-theme='dark'] .auth-input::placeholder {
+  color: rgba(255, 255, 255, 0.35) !important;
+}
+
+[data-theme='dark'] .auth-password-toggle {
+  color: #98989d !important;
+}
+
+[data-theme='dark'] .auth-password-toggle:hover {
+  color: #f5f5f7 !important;
+}
+
+[data-theme='dark'] .auth-alert.success {
+  background: rgba(48, 209, 88, 0.14) !important;
+  border: 1px solid rgba(48, 209, 88, 0.35) !important;
+  color: #30d158 !important;
+}
+
+[data-theme='dark'] .auth-alert.error {
+  background: rgba(255, 69, 58, 0.14) !important;
+  border: 1px solid rgba(255, 69, 58, 0.35) !important;
+  color: #ff453a !important;
+}
+
+[data-theme='dark'] .auth-token-alert {
+  background: rgba(48, 209, 88, 0.14) !important;
+  border-color: rgba(48, 209, 88, 0.35) !important;
+  color: #30d158 !important;
+}
+
+[data-theme='dark'] .auth-resend-btn {
+  color: #2997ff !important;
+}
+
+[data-theme='dark'] .auth-resend-btn:hover {
+  color: #5ac8fa !important;
+  background: rgba(41, 151, 255, 0.14) !important;
+}
+
+[data-theme='dark'] .strength-bar {
+  background: rgba(255, 255, 255, 0.14) !important;
+}
+
+[data-theme='dark'] .strength-bar.active-weak { background: #ff453a !important; }
+[data-theme='dark'] .strength-bar.active-medium { background: #ff9f0a !important; }
+[data-theme='dark'] .strength-bar.active-strong { background: #30d158 !important; }
+
+[data-theme='dark'] .strength-label {
+  color: #a1a1a6 !important;
+}
+
+[data-theme='dark'] .auth-submit-btn {
+  background: #0071e3 !important;
+  box-shadow: 0 4px 20px rgba(0, 113, 227, 0.4) !important;
+}
+
+[data-theme='dark'] .auth-submit-btn:hover:not(:disabled) {
+  background: #0077ed !important;
+  box-shadow: 0 6px 24px rgba(0, 113, 227, 0.5) !important;
+}
+
+[data-theme='dark'] .auth-recovery-footer {
+  border-top: 1px solid rgba(255, 255, 255, 0.12) !important;
+}
+
+[data-theme='dark'] .auth-recovery-footer a {
+  color: #2997ff !important;
+}
+
+[data-theme='dark'] .auth-back-link {
+  background: rgba(255, 255, 255, 0.08) !important;
+  border: 1px solid rgba(255, 255, 255, 0.14) !important;
+  color: #a1a1a6 !important;
+}
+
+[data-theme='dark'] .auth-back-link:hover {
+  background: rgba(255, 255, 255, 0.14) !important;
+  color: #f5f5f7 !important;
+  border-color: rgba(41, 151, 255, 0.3) !important;
 }

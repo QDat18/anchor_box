@@ -250,27 +250,17 @@ export function AuthRecovery({ mode = 'forgot' }: AuthRecoveryProps) {
                   </div>
 
                   <div className="auth-input-group">
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div className="auth-input-label-row">
                       <label className="auth-input-label" htmlFor="recovery-otp">
                         Mã OTP xác thực (6 số)
                       </label>
                       <button
                         type="button"
+                        className="auth-resend-btn"
                         onClick={() => {
                           setStep('request');
                           setError(null);
                           setSuccessMsg(null);
-                        }}
-                        style={{
-                          background: 'none',
-                          border: 'none',
-                          color: '#0284c7',
-                          fontSize: '0.8rem',
-                          cursor: 'pointer',
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: '4px',
-                          padding: '0 0 4px',
                         }}
                       >
                         <RotateCcw size={12} />
@@ -299,7 +289,7 @@ export function AuthRecovery({ mode = 'forgot' }: AuthRecoveryProps) {
               )}
 
               {token && (
-                <div style={{ fontSize: '0.85rem', color: '#10b981', padding: '6px 12px', background: 'rgba(16, 185, 129, 0.1)', borderRadius: '8px', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <div className="auth-token-alert">
                   <CheckCircle2 size={15} />
                   <span>Đã nhận diện mã xác thực từ liên kết email của bạn.</span>
                 </div>
