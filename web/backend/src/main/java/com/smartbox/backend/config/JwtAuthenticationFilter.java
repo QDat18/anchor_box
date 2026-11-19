@@ -98,7 +98,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         ).contains(path))) {
             return true;
         }
-        return "GET".equals(request.getMethod()) && (
+        return ("GET".equals(request.getMethod()) || "HEAD".equals(request.getMethod())) && (
                 path.equals("/api/payments/vnpay/ipn") ||
                 path.equals("/api/payments/vnpay/return") ||
                 path.equals("/api/payments/mode") ||
