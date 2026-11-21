@@ -145,7 +145,10 @@ public class ApprovalTicketService {
         if (!Set.of("pending", "customer_decision_pending").contains(order.get("status"))) {
             throw new ConflictException("TICKET_ORDER_NOT_IN_REVIEW: Đơn hàng không ở trạng thái chờ duyệt");
         }
-        var itemApproval = db.one("SELECT a.*, COALESCE(a.manager_id, c.manager_id, p.manager_id) AS effective_manager_id FROM public.order_item_approvals a JOIN public.products p ON p.id=a.product_id LEFT JOIN public.product_categories c ON c.id=p.category_id WHERE a.ticket_id=? AND a.order_item_id=? FOR UPDATE", ticketId, orderItemId);
+        // PostgreSQL không cho FOR UPDATE trên câu có LEFT JOIN: khóa riêng dòng duyệt trước, rồi mới đọc kèm manager.
+        var locked = db.one("SELECT id FROM public.order_item_approvals WHERE ticket_id=? AND order_item_id=? FOR UPDATE", ticketId, orderItemId);
+        var itemApproval = locked == null ? null
+                : db.one("SELECT a.*, COALESCE(a.manager_id, c.manager_id, p.manager_id) AS effective_manager_id FROM public.order_item_approvals a JOIN public.products p ON p.id=a.product_id LEFT JOIN public.product_categories c ON c.id=p.category_id WHERE a.id=?", locked.get("id"));
         if (itemApproval == null) {
             throw new BadRequestException("ITEM_APPROVAL_NOT_FOUND");
         }
