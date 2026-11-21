@@ -13,6 +13,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.util.*;
 import org.springframework.util.*;
+import org.springframework.web.util.UriComponentsBuilder;
 import java.util.*;
 import java.util.concurrent.*;
 import java.time.*;
@@ -25,16 +26,36 @@ class VnpayIntegrationTests extends CommerceIntegrationTests {
     @BeforeEach void provider(){ReflectionTestUtils.setField((Object)AopTestUtils.getTargetObject(payments),"provider","mock");}
     void vnpay(){ReflectionTestUtils.setField((Object)AopTestUtils.getTargetObject(payments),"provider","vnpay");}
     UUID checkout(UUID id){approve(id);vnpay();return UUID.fromString(payments.checkout(id,UUID.randomUUID().toString()).get("paymentId").toString());}
-    LinkedMultiValueMap<String,String> notification(UUID payment,String response,String status,String transaction){
-        var data=new TreeMap<String,String>();data.put("vnp_TmnCode","TEST1234");data.put("vnp_TxnRef",payment.toString().replace("-",""));data.put("vnp_Amount",jdbc.queryForObject("SELECT amount FROM public.payments WHERE id=?",java.math.BigDecimal.class,payment).movePointRight(2).toBigIntegerExact().toString());
+    LinkedMultiValueMap<String,String> notification(UUID payment,String response,String status,String transaction){return notification(payment,payment.toString().replace("-",""),response,status,transaction);}
+    LinkedMultiValueMap<String,String> notification(UUID payment,String reference,String response,String status,String transaction){
+        var data=new TreeMap<String,String>();data.put("vnp_TmnCode","TEST1234");data.put("vnp_TxnRef",reference);data.put("vnp_Amount",jdbc.queryForObject("SELECT amount FROM public.payments WHERE id=?",java.math.BigDecimal.class,payment).movePointRight(2).toBigIntegerExact().toString());
         data.put("vnp_ResponseCode",response);data.put("vnp_TransactionStatus",status);data.put("vnp_TransactionNo",transaction);data.put("vnp_PayDate",DateTimeFormatter.ofPattern("uuuuMMddHHmmss").format(OffsetDateTime.now(ZoneOffset.ofHours(7))));
         return signed(data);
     }
     LinkedMultiValueMap<String,String> signed(Map<String,String> data){var result=new LinkedMultiValueMap<String,String>();data.forEach(result::add);result.set("vnp_SecureHash",gateway.signature(data));return result;}
     void code(String expected,MultiValueMap<String,String> data){assertEquals(expected,payments.vnpayIpn(data).get("RspCode"));}
     @Test void checkoutUrlAndOwnerResumeDoNotCreateAnotherPayment(){
-        UUID order=order(1);approve(order);vnpay();String key=UUID.randomUUID().toString();var first=payments.checkout(order,key);assertEquals(first,payments.checkout(order,key));assertEquals(first,payments.session(order));assertEquals("sandbox",first.get("environment"));assertEquals(false,first.get("demoActionsEnabled"));assertTrue(first.get("paymentUrl").toString().startsWith("https://sandbox.vnpayment.vn/"));assertEquals(1,count("payments"));
+        UUID order=order(1);approve(order);vnpay();String key=UUID.randomUUID().toString();var first=payments.checkout(order,key);
+        var replay=payments.checkout(order,key);var resumed=payments.session(order);
+        assertEquals(first.get("paymentId"),replay.get("paymentId"));assertEquals(first.get("paymentId"),resumed.get("paymentId"));assertEquals(first.get("expiresAt"),resumed.get("expiresAt"));
+        assertNotEquals(txnRef(first),txnRef(replay));assertNotEquals(txnRef(first),txnRef(resumed));
+        UUID paymentId=UUID.fromString(first.get("paymentId").toString());assertEquals(paymentId,VnpayGateway.paymentId(txnRef(resumed)));
+        assertEquals(txnRef(resumed),jdbc.queryForObject("SELECT gateway_reference FROM public.payments WHERE id=?",String.class,paymentId));
+        assertEquals("sandbox",first.get("environment"));assertEquals(false,first.get("demoActionsEnabled"));assertTrue(first.get("paymentUrl").toString().startsWith("https://sandbox.vnpayment.vn/"));assertEquals(1,count("payments"));
         actors.actor.set(new com.smartbox.backend.security.CurrentActor.Actor(STAFF,"customer"));assertThrows(ForbiddenException.class,()->payments.session(order));
+    }
+    static String txnRef(Map<String,Object> response){return UriComponentsBuilder.fromUriString(response.get("paymentUrl").toString()).build().getQueryParams().getFirst("vnp_TxnRef");}
+    @Test void paymentWithStaleReferenceAfterResumeIsStillConfirmed(){
+        UUID order=order(1),payment=checkout(order);String stale=payment.toString().replace("-","");
+        var resumed=payments.session(order);assertNotEquals(stale,txnRef(resumed));
+        code("00",notification(payment,stale,"00","00","777777"));
+        assertEquals("confirmed",orders.detail(order).get("status"));assertEquals("777777",jdbc.queryForObject("SELECT transaction_ref FROM public.payments WHERE id=?",String.class,payment));
+    }
+    @Test void secondSuccessfulAttemptIsFlaggedForManualRefund(){
+        UUID order=order(1),payment=checkout(order);String stale=payment.toString().replace("-","");String fresh=txnRef(payments.session(order));
+        code("00",notification(payment,stale,"00","00","888888"));code("02",notification(payment,fresh,"00","00","999999"));
+        assertEquals("success",jdbc.queryForObject("SELECT status FROM public.payments WHERE id=?",String.class,payment));assertEquals("888888",jdbc.queryForObject("SELECT transaction_ref FROM public.payments WHERE id=?",String.class,payment));
+        assertEquals(1,jdbc.queryForObject("SELECT count(*) FROM public.audit_logs WHERE action='VNPAY_DUPLICATE_PAYMENT' AND target_id=?",Integer.class,payment));
     }
     @Test void validIpnSuccessIsAtomicAndDuplicateIsAcknowledgedOnce(){
         UUID order=order(2),payment=checkout(order);var data=notification(payment,"00","00","111111");code("00",data);code("02",data);

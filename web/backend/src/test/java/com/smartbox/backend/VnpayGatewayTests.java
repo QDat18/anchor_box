@@ -26,6 +26,16 @@ class VnpayGatewayTests {
         assertTrue(url.contains("vnp_Amount=120000000"));assertTrue(url.contains("vnp_CreateDate=20261014070000"));assertTrue(url.contains("vnp_ExpireDate=20261014071500"));assertTrue(url.contains("vnp_TxnRef="+id.toString().replace("-","")));
         assertThrows(BadRequestException.class,()->gateway().paymentUrl(id,new BigDecimal("1.5"),now,now.plusMinutes(15),"127.0.0.1"));
     }
+    @Test void retryReferenceIsUniquePerAttemptButMapsBackToSamePayment(){
+        var id=UUID.randomUUID();var now=OffsetDateTime.parse("2026-11-21T10:07:19Z");
+        String ref=VnpayGateway.retryReference(id,now);
+        assertEquals(id.toString().replace("-","")+"20261121170719",ref);
+        assertNotEquals(ref,VnpayGateway.retryReference(id,now.plusSeconds(1)));
+        assertEquals(id,VnpayGateway.paymentId(ref));
+        assertEquals(id,VnpayGateway.paymentId(id.toString().replace("-","")));
+        String url=gateway().paymentUrl(id,ref,new BigDecimal("1200000"),now,now.plusMinutes(15),"127.0.0.1");
+        assertTrue(url.contains("vnp_TxnRef="+ref+"&"));assertTrue(url.contains("vnp_CreateDate=20261121170719"));
+    }
     @Test void sandboxConfigurationCannotSilentlySwitchToRealGateway(){
         var gateway=gateway();ReflectionTestUtils.setField(gateway,"url","https://pay.vnpay.vn/vpcpay.html");assertThrows(AppException.class,gateway::configured);
     }

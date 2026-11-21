@@ -102,7 +102,10 @@ public class PaymentService {
                 throw new ConflictException("IDEMPOTENCY_KEY_REUSED");
             }
             if (stored.get("response") != null) {
-                return readResponse(stored.get("response").toString());
+                var replay = readResponse(stored.get("response").toString());
+                var replayPayment = stored.get("payment_id") == null ? null
+                        : db.one("SELECT * FROM public.payments WHERE id=? FOR UPDATE", stored.get("payment_id"));
+                return replayPayment == null ? replay : refreshVnpayLink(replay, order, replayPayment);
             }
         }
         if (!Set.of("awaiting_payment", "pending").contains(order.get("status"))) {
@@ -135,14 +138,7 @@ public class PaymentService {
         var expires = paymentTimeoutService.scheduleOrderPaymentExpiry(id, order);
         String paymentUrl;
         if ("vnpay".equals(provider)) {
-            String ip = "127.0.0.1";
-            if (RequestContextHolder.getRequestAttributes() instanceof ServletRequestAttributes request) {
-                ip = request.getRequest().getRemoteAddr();
-                if ("0:0:0:0:0:0:0:1".equals(ip) || "::1".equals(ip)) {
-                    ip = "127.0.0.1";
-                }
-            }
-            paymentUrl = vnpay.paymentUrl(payment, money(order.get("total")), created, expires, ip);
+            paymentUrl = vnpay.paymentUrl(payment, money(order.get("total")), created, expires, clientIp());
         } else {
             paymentUrl = publicUrl + "/mock-payment/payments/" + payment;
         }
@@ -179,20 +175,56 @@ public class PaymentService {
         }
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public Map<String, Object> session(UUID id) {
         var actor = actors.get();
         actor.requireRoles("customer");
-        var order = orders.owned(id, actor, false);
+        var order = orders.owned(id, actor, true);
         if (!"awaiting_payment".equals(order.get("status"))) {
             throw new ConflictException("PAYMENT_NOT_PENDING");
         }
-        var payment = db.one("SELECT * FROM public.payments WHERE order_id=? AND status='pending' AND expires_at IS NOT NULL", id);
+        var payment = db.one("SELECT * FROM public.payments WHERE order_id=? AND status='pending' AND expires_at IS NOT NULL FOR UPDATE", id);
         if (!time(payment.get("expires_at")).isAfter(now())) {
             throw new ConflictException("PAYMENT_LINK_EXPIRED");
         }
         var stored = db.one("SELECT response FROM public.checkout_keys WHERE order_id=? AND payment_id=? AND response IS NOT NULL ORDER BY created_at DESC LIMIT 1", id, payment.get("id"));
-        return readResponse(stored.get("response").toString());
+        return refreshVnpayLink(readResponse(stored.get("response").toString()), order, payment);
+    }
+
+    /**
+     * VNPAY không cho mở lại link có vnp_TxnRef đã dùng (Error.html?code=01 "Giao dịch đang được xử lý
+     * hoặc đã quá thời gian"). Khi khách quay lại thanh toán, cấp TxnRef + vnp_CreateDate mới cho cùng
+     * payment, giữ nguyên hạn thanh toán, và chỉ chấp nhận IPN của TxnRef mới nhất.
+     */
+    private Map<String, Object> refreshVnpayLink(Map<String, Object> response, Map<String, Object> order, Map<String, Object> payment) {
+        if (!"vnpay".equals(payment.get("provider")) || !"pending".equals(payment.get("status"))) {
+            return response;
+        }
+        OffsetDateTime expires = time(payment.get("expires_at"));
+        OffsetDateTime created = now();
+        if (!expires.isAfter(created)) {
+            return response;
+        }
+        UUID paymentId = uuid(payment.get("id"));
+        String reference = VnpayGateway.retryReference(paymentId, created);
+        String paymentUrl = vnpay.paymentUrl(paymentId, reference, money(payment.get("amount")), created, expires, clientIp());
+        db.update("UPDATE public.payments SET gateway_reference=? WHERE id=? AND status='pending'", reference, paymentId);
+        Map<String, Object> fresh = new LinkedHashMap<>(response);
+        fresh.put("paymentUrl", paymentUrl);
+        db.update("UPDATE public.checkout_keys SET response=? WHERE order_id=? AND payment_id=?",
+                serialize(fresh), uuid(order.get("id")), paymentId);
+        return fresh;
+    }
+
+    private static String clientIp() {
+        String ip = "127.0.0.1";
+        if (RequestContextHolder.getRequestAttributes() instanceof ServletRequestAttributes request) {
+            ip = request.getRequest().getRemoteAddr();
+            if ("0:0:0:0:0:0:0:1".equals(ip) || "::1".equals(ip)) {
+                ip = "127.0.0.1";
+            }
+        }
+        return ip;
     }
 
     private Map<String, Object> readResponse(String value) {
@@ -297,8 +329,10 @@ public class PaymentService {
     public Map<String, String> vnpayIpn(MultiValueMap<String, String> input) {
         var notification = vnpay.verify(input);
         UUID paymentId = VnpayGateway.paymentId(notification.reference());
-        var references = db.list("SELECT order_id FROM public.payments WHERE id=? AND gateway_reference=? AND provider='vnpay' AND provider_environment='sandbox' AND provider_terminal=?",
-                paymentId, notification.reference(), notification.terminal());
+        // Không lọc theo gateway_reference: khách có thể trả bằng link của lần thử trước (tab cũ) sau khi
+        // link đã được cấp lại. Chữ ký, terminal, số tiền và fingerprint đã đủ để xác thực.
+        var references = db.list("SELECT order_id FROM public.payments WHERE id=? AND provider='vnpay' AND provider_environment='sandbox' AND provider_terminal=?",
+                paymentId, notification.terminal());
         if (references.isEmpty()) {
             return ipnResponse("01");
         }
@@ -312,6 +346,15 @@ public class PaymentService {
             return ipnResponse("02");
         }
         String status = payment.get("status").toString();
+        if (notification.success() && Set.of("success", "refund_required", "refunded").contains(status)
+                && payment.get("transaction_ref") != null && !payment.get("transaction_ref").toString().equals(notification.transactionNo())) {
+            // Khách đã trả thành công bằng hai lần thử khác nhau: ghi lại để nhân viên hoàn tiền thủ công.
+            db.update("INSERT INTO public.payment_provider_notifications(id,payment_id,fingerprint,response_code,transaction_status,created_at) VALUES(?,?,?,?,?,?)",
+                    UUID.randomUUID(), paymentId, notification.fingerprint(), notification.responseCode(), notification.transactionStatus(), now());
+            db.audit(null, "VNPAY_DUPLICATE_PAYMENT", "payments", paymentId,
+                    "Giao dịch trùng " + notification.reference() + "/" + notification.transactionNo() + " cần hoàn tiền thủ công");
+            return ipnResponse("02");
+        }
         if (Set.of("success", "refund_required", "refunded").contains(status) || (!notification.success() && Set.of("failed", "expired").contains(status))) {
             return ipnResponse("02");
         }

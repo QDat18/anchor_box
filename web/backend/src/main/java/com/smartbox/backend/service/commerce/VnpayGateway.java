@@ -55,6 +55,8 @@ public class VnpayGateway {
     private static final DateTimeFormatter DATE = DateTimeFormatter
             .ofPattern("uuuuMMddHHmmss")
             .withResolverStyle(ResolverStyle.STRICT);
+    /** 32 hex của payment id, có thể kèm hậu tố 14 chữ số cho lần thanh toán lại. */
+    private static final String REFERENCE = "[0-9a-fA-F]{32}([0-9]{14})?";
 
     public record Notification(
             String reference,
@@ -146,7 +148,23 @@ public class VnpayGateway {
      * Tạo đường dẫn thanh toán VNPAY sandbox.
      */
     public String paymentUrl(UUID payment, BigDecimal amount, OffsetDateTime created, OffsetDateTime expires, String ip) {
+        return paymentUrl(payment, payment.toString().replace("-", ""), amount, created, expires, ip);
+    }
+
+    /**
+     * Mã tham chiếu cho lần mở lại link thanh toán. VNPAY từ chối mở lại một vnp_TxnRef đã dùng
+     * (Error.html?code=01), nên mỗi lần khách quay lại thanh toán phải dùng TxnRef mới.
+     * Định dạng: 32 ký tự hex của payment id + yyyyMMddHHmmss (giờ Việt Nam).
+     */
+    public static String retryReference(UUID payment, OffsetDateTime at) {
+        return payment.toString().replace("-", "") + DATE.format(at.atZoneSameInstant(VIETNAM));
+    }
+
+    public String paymentUrl(UUID payment, String reference, BigDecimal amount, OffsetDateTime created, OffsetDateTime expires, String ip) {
         configured();
+        if (reference == null || !reference.matches(REFERENCE) || !paymentId(reference).equals(payment)) {
+            throw new IllegalArgumentException("Invalid VNPAY reference");
+        }
         String value;
         try {
             value = amount.movePointRight(2).toBigIntegerExact().toString();
@@ -163,7 +181,7 @@ public class VnpayGateway {
         params.put("vnp_TmnCode", terminal);
         params.put("vnp_Amount", value);
         params.put("vnp_CurrCode", "VND");
-        params.put("vnp_TxnRef", payment.toString().replace("-", ""));
+        params.put("vnp_TxnRef", reference);
         params.put("vnp_OrderInfo", "Thanh toan SmartBox " + payment);
         params.put("vnp_OrderType", "other");
         params.put("vnp_Locale", "vn");
@@ -217,7 +235,7 @@ public class VnpayGateway {
         }
 
         String ref = fields.get("vnp_TxnRef");
-        if (ref == null || !ref.matches("[0-9a-fA-F]{32}")) {
+        if (ref == null || !ref.matches(REFERENCE)) {
             throw new InvalidNotification("01");
         }
 
@@ -280,7 +298,7 @@ public class VnpayGateway {
                 reference.substring(8, 12) + "-" +
                 reference.substring(12, 16) + "-" +
                 reference.substring(16, 20) + "-" +
-                reference.substring(20)
+                reference.substring(20, 32)
         );
     }
 }
