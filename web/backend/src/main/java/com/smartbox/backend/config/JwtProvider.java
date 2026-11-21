@@ -15,13 +15,18 @@ import org.springframework.stereotype.Component;
 
 import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
+import java.util.Base64;
 import java.util.Date;
 import java.util.UUID;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @Component
 @Slf4j
 @Getter
 public class JwtProvider {
+
+    private static final Pattern ALG = Pattern.compile("\"alg\"\\s*:\\s*\"([A-Za-z0-9]+)\"");
 
     @Value("${smartbox.jwt.secret:}")
     private String jwtSecret;
@@ -74,6 +79,13 @@ public class JwtProvider {
     }
 
     public boolean validateToken(String token) {
+        String alg = headerAlgorithm(token);
+        if (alg != null && !alg.startsWith("HS")) {
+            // Token Supabase ký bất đối xứng (ES256/RS256): không kiểm tra được bằng JWT_SECRET.
+            // Không phải lỗi; JwtAuthenticationFilter sẽ xác thực qua Supabase /auth/v1/user.
+            log.debug("Bỏ qua kiểm tra cục bộ cho token alg={}", alg);
+            return false;
+        }
         try {
             Jwts.parser()
                     .verifyWith(getSigningKey())
@@ -90,6 +102,24 @@ public class JwtProvider {
             log.error("Chuỗi Claims JWT rỗng: {}", e.getMessage());
         }
         return false;
+    }
+
+    /** Đọc "alg" trong header JWT (chưa xác minh chữ ký); null nếu token không đọc được. */
+    static String headerAlgorithm(String token) {
+        if (token == null) {
+            return null;
+        }
+        int dot = token.indexOf('.');
+        if (dot <= 0) {
+            return null;
+        }
+        try {
+            String header = new String(Base64.getUrlDecoder().decode(token.substring(0, dot)), StandardCharsets.UTF_8);
+            Matcher matcher = ALG.matcher(header);
+            return matcher.find() ? matcher.group(1) : null;
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
     }
 
     public Claims extractClaims(String token) {
